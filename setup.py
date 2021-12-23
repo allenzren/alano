@@ -7,5 +7,5 @@ setuptools.setup(
     author='Allen Z. Ren',
     author_email='allen.ren@princeton.edu',
     packages=setuptools.find_packages(),
-    install_requires=['torch', 'numpy'],
+    install_requires=['torch', 'numpy', 'gym'],
 )
