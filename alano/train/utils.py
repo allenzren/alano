@@ -1,4 +1,4 @@
-from train import *
+import torch
 import os
 import glob
 

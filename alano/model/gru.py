@@ -1,4 +1,5 @@
-from model import *
+import torch
+from torch import nn
 
 
 class GRU(torch.nn.Module):

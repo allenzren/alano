@@ -1,7 +1,8 @@
 # Please contact the author(s) of this library if you have any questions.
 # Authors: Kai-Chieh Hsu ( kaichieh@princeton.edu )
 #          Allen Z. Ren (allen.ren@princeton.edu)
-from train import *
+import torch
+import numpy as np
 
 from abc import ABC, abstractmethod
 import os
@@ -14,7 +15,7 @@ from train.scheduler import StepLRMargin
 from train.utils import soft_update, save_model
 
 
-class BaseSAC(ABC):
+class SAC_Base(ABC):
     def __init__(self, CONFIG, CONFIG_ARCH, CONFIG_ENV):
         """
         __init__: initialization.

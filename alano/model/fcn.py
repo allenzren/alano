@@ -1,4 +1,4 @@
-from model import *
+from torch import nn
 
 
 class Interpolate(nn.Module):

@@ -15,6 +15,3 @@ def plot_grad_flow(named_parameters):
 #     plt.grid(True)
 
     print(ave_grads)
-
-
-#     plt.show()

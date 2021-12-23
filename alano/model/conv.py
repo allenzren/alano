@@ -1,4 +1,8 @@
-from model import *
+from torch import nn
+import numpy as np
+from torch.nn.utils import spectral_norm
+from collections import OrderedDict
+
 from model.spatial_softmax import SpatialSoftmax
 
 

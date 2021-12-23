@@ -1,4 +1,5 @@
-from train import *
+import torch
+import torch.nn.functional as F
 
 
 def huber_loss(output, target, thres=1):

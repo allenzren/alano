@@ -1,12 +1,14 @@
-from model import *
+import torch
+from torch import nn
+import numpy as np
+import copy
+from torch.distributions import Normal
+
 from model.conv import ConvNet
 from model.mlp import MLP
 from model.gru import GRU
 from model.lstm import LSTM
 from model.utils import tie_weights
-
-import copy
-from torch.distributions import Normal
 
 
 class Encoder(torch.nn.Module):

@@ -1,5 +1,5 @@
-from geometry import *
-
+import numpy as np
+from numpy import array
 
 def NearZero(z):
     return abs(z) < 1e-6

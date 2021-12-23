@@ -2,11 +2,12 @@
 # Authors: Kai-Chieh Hsu ( kaichieh@princeton.edu )
 #          Allen Z. Ren (allen.ren@princeton.edu)
 
-from train import *
-from train.base_sac import BaseSAC
+import torch
+import torch.nn.functional as F
+from train.sac_base import SAC_Base
 
 
-class SAC_mini(BaseSAC):
+class SAC_mini(SAC_Base):
     def __init__(self, CONFIG, CONFIG_ARCH, CONFIG_ENV):
         super().__init__(CONFIG, CONFIG_ARCH, CONFIG_ENV)
 
