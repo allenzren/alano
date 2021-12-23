@@ -4,11 +4,11 @@ import numpy as np
 import copy
 from torch.distributions import Normal
 
-from model.conv import ConvNet
-from model.mlp import MLP
-from model.gru import GRU
-from model.lstm import LSTM
-from model.utils import tie_weights
+from .conv import ConvNet
+from .mlp import MLP
+from .gru import GRU
+from .lstm import LSTM
+from .utils import tie_weights
 
 
 class Encoder(torch.nn.Module):

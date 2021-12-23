@@ -10,7 +10,7 @@ import os
 import numpy as np
 import matplotlib.pyplot as plt
 
-from train.replay_memory import ReplayMemory
+from .replay_memory import ReplayMemory
 
 TransitionLatent = namedtuple('TransitionLatent',
                               ['z', 's', 'a', 'r', 's_', 'done', 'info'])

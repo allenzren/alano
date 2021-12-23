@@ -3,7 +3,7 @@ import numpy as np
 from torch.nn.utils import spectral_norm
 from collections import OrderedDict
 
-from model.spatial_softmax import SpatialSoftmax
+from .spatial_softmax import SpatialSoftmax
 
 
 class ResidualBlock(nn.Module):

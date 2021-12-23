@@ -1,6 +1,6 @@
 import numpy as np
 import pybullet as p
-from geometry.transform import quat2rot
+from ..geometry.transform import quat2rot
 
 
 def plot_frame_pb(pos, orn=np.array([0., 0., 0., 1.]), w_first=False):

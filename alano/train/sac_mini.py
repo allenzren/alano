@@ -4,7 +4,7 @@
 
 import torch
 import torch.nn.functional as F
-from train.sac_base import SAC_Base
+from .sac_base import SAC_Base
 
 
 class SAC_mini(SAC_Base):
