@@ -10,8 +10,8 @@ import copy
 from torch.optim import Adam
 from torch.optim import lr_scheduler
 
-from model.sac import SACPiNetwork, SACTwinnedQNetwork
-from .scheduler import StepLRMargin
+from ..model.sac import SACPiNetwork, SACTwinnedQNetwork
+from ..train.scheduler import StepLRMargin
 from .utils import soft_update, save_model
 
 
@@ -23,14 +23,13 @@ class SAC_Base(ABC):
         Args:
             CONFIG (object): update-rekated hyper-parameter configuration.
             CONFIG_ARCH (object): NN architecture configuration.
-            CONFIG_ENV (object): environment configuration.
+            config_env (object): environment configuration.
         """
         self.CONFIG = CONFIG
         self.CONFIG_ARCH = CONFIG_ARCH
         self.EVAL = CONFIG.EVAL
 
         # == ENV PARAM ==
-        self.obs_channel = CONFIG_ENV.OBS_CHANNEL
         self.action_mag = CONFIG_ENV.ACTION_MAG
         self.action_dim = CONFIG_ENV.ACTION_DIM
         self.img_w = CONFIG_ENV.IMG_W
@@ -38,21 +37,12 @@ class SAC_Base(ABC):
 
         # NN: device, action indicators
         self.device = CONFIG.DEVICE
-        self.critic_has_act_ind = CONFIG_ARCH.CRITIC_HAS_ACT_IND
-        if CONFIG_ARCH.ACT_IND is not None:
-            self.act_ind = torch.FloatTensor(CONFIG_ARCH.ACT_IND).to(
-                self.device)
-            self.act_ind_dim = self.act_ind.shape[0]
 
         # reach-avoid setting
         self.mode = CONFIG.MODE
 
         # == PARAM FOR TRAINING ==
         if not self.EVAL:
-            self.terminal_type = CONFIG.TERMINAL_TYPE
-
-            # NN
-            self.BATCH_SIZE = CONFIG.BATCH_SIZE
 
             # Learning Rate
             self.LR_A_SCHEDULE = CONFIG.LR_A_SCHEDULE
@@ -121,17 +111,13 @@ class SAC_Base(ABC):
                       actor_path=None,
                       critic_path=None,
                       tie_conv=True):
-        if self.critic_has_act_ind:
-            critic_action_dim = self.action_dim + self.act_ind_dim
-        else:
-            critic_action_dim = self.action_dim
 
         self.critic = SACTwinnedQNetwork(
-            input_n_channel=self.obs_channel,
+            input_n_channel=self.CONFIG_ARCH.OBS_CHANNEL,
             img_sz=[self.img_h, self.img_w],
-            latent_dim=self.CONFIG.LATENT_DIM,
+            # latent_dim=self.CONFIG.LATENT_DIM,
             mlp_dim=self.CONFIG_ARCH.MLP_DIM['critic'],
-            action_dim=critic_action_dim,
+            action_dim=self.action_dim,
             append_dim=self.CONFIG_ARCH.APPEND_DIM,
             activation_type=self.CONFIG_ARCH.ACTIVATION['critic'],
             kernel_sz=self.CONFIG_ARCH.KERNEL_SIZE,
@@ -144,9 +130,9 @@ class SAC_Base(ABC):
         if verbose:
             print("\nThe actor shares the same encoder with the critic.")
         self.actor = SACPiNetwork(
-            input_n_channel=self.obs_channel,
+            input_n_channel=self.CONFIG_ARCH.OBS_CHANNEL,
             img_sz=[self.img_h, self.img_w],
-            latent_dim=self.CONFIG.LATENT_DIM,
+            # latent_dim=self.CONFIG.LATENT_DIM,
             action_dim=self.action_dim,
             action_mag=self.action_mag,
             mlp_dim=self.CONFIG_ARCH.MLP_DIM['actor'],
@@ -233,7 +219,7 @@ class SAC_Base(ABC):
             else:
                 self.actor_scheduler.step()
 
-    def updateHyperParam(self):
+    def update_hyper_param(self):
         self.update_critic_hyperParam()
         self.update_actor_hyperParam()
         if self.LEARN_ALPHA:
@@ -254,9 +240,7 @@ class SAC_Base(ABC):
     def update(self, batch, timer, update_period=2):
         raise NotImplementedError
 
-    # endregion
-
-    # region: utils
+    # utils
     @abstractmethod
     def value(self, obs, append):
         raise NotImplementedError

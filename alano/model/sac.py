@@ -156,7 +156,7 @@ class SACPiNetwork(torch.nn.Module):
     def forward(
             self,
             image,  # NCHW or LNCHW
-            append,  # LN x append_dim
+            append=None,  # LN x append_dim
             latent=None,  # LN x z_dim
             detach_encoder=False,
             detach_rec=False,
@@ -186,7 +186,8 @@ class SACPiNetwork(torch.nn.Module):
         num_extra_dim = 0
         if image.dim() == 3:  # running policy deterministically at test time
             image = image.unsqueeze(0)
-            append = append.unsqueeze(0)
+            if append is not None:
+                append = append.unsqueeze(0)
             num_extra_dim += 1
             N, C, H, W = image.shape
         elif image.dim() == 4:
@@ -196,7 +197,8 @@ class SACPiNetwork(torch.nn.Module):
             image = image.view(L * N, C, H, W)
         if self.rec is not None and L == 0:
             # recurrent but input does not have L
-            append = append.unsqueeze(0)
+            if append is not None:
+                append = append.unsqueeze(0)
             num_extra_dim += 1
             L = 1
         restore_seq = L > 0
@@ -221,9 +223,10 @@ class SACPiNetwork(torch.nn.Module):
         # Append, recurrent, latent
         if self.rec is not None:
             conv_out = self.layernorm(conv_out)
-            conv_out = torch.cat((conv_out, append), dim=-1)
+            if append is not None:
+                conv_out = torch.cat((conv_out, append), dim=-1)
             conv_out, (hn, cn) = self.rec(conv_out, init_rnn_state, detach_rec)
-        else:
+        elif append is not None:
             conv_out = torch.cat((conv_out, append), dim=-1)
         if latent is not None:
             conv_out = torch.cat((conv_out, latent), dim=-1)
@@ -246,7 +249,7 @@ class SACPiNetwork(torch.nn.Module):
 
     def sample(self,
                image,
-               append,
+               append=None,
                latent=None,
                detach_encoder=False,
                detach_rec=False,
@@ -274,7 +277,8 @@ class SACPiNetwork(torch.nn.Module):
         num_extra_dim = 0
         if image.dim() == 3:  # running policy deterministically at test time
             image = image.unsqueeze(0)
-            append = append.unsqueeze(0)
+            if append is not None:
+                append = append.unsqueeze(0)
             num_extra_dim += 1
             N, C, H, W = image.shape
         elif image.dim() == 4:
@@ -284,7 +288,8 @@ class SACPiNetwork(torch.nn.Module):
             image = image.view(L * N, C, H, W)
         if self.rec is not None and L == 0:
             # recurrent but input does not have L
-            append = append.unsqueeze(0)
+            if append is not None:
+                append = append.unsqueeze(0)
             num_extra_dim += 1
             L = 1
         restore_seq = L > 0
@@ -309,9 +314,10 @@ class SACPiNetwork(torch.nn.Module):
         # Append, recurrent, latent
         if self.rec is not None:
             conv_out = self.layernorm(conv_out)
-            conv_out = torch.cat((conv_out, append), dim=-1)
+            if append is not None:
+                conv_out = torch.cat((conv_out, append), dim=-1)
             conv_out, (hn, cn) = self.rec(conv_out, init_rnn_state, detach_rec)
-        else:
+        elif append is not None:
             conv_out = torch.cat((conv_out, append), dim=-1)
         if latent is not None:
             conv_out = torch.cat((conv_out, latent), dim=-1)
@@ -429,7 +435,7 @@ class SACTwinnedQNetwork(torch.nn.Module):
     def forward(self,
                 image,
                 actions,
-                append,
+                append=None,
                 latent=None,
                 detach_encoder=False,
                 detach_rec=False,
@@ -460,7 +466,8 @@ class SACTwinnedQNetwork(torch.nn.Module):
         if image.dim() == 3:  # running policy deterministically at test time
             image = image.unsqueeze(0)
             actions = actions.unsqueeze(0)
-            append = append.unsqueeze(0)
+            if append is not None:
+                append = append.unsqueeze(0)
             num_extra_dim += 1
             N, C, H, W = image.shape
         elif image.dim() == 4:
@@ -470,7 +477,8 @@ class SACTwinnedQNetwork(torch.nn.Module):
             image = image.view(L * N, C, H, W)
         if self.rec is not None and L == 0:
             # recurrent but input does not have L
-            append = append.unsqueeze(0)
+            if append is not None:
+                append = append.unsqueeze(0)
             actions = actions.unsqueeze(0)
             num_extra_dim += 1
             L = 1
@@ -496,9 +504,10 @@ class SACTwinnedQNetwork(torch.nn.Module):
         # Append, recurrent, latent
         if self.rec is not None:
             conv_out = self.layernorm(conv_out)
-            conv_out = torch.cat((conv_out, append), dim=-1)
+            if append is not None:
+                conv_out = torch.cat((conv_out, append), dim=-1)
             conv_out, (hn, cn) = self.rec(conv_out, init_rnn_state, detach_rec)
-        else:
+        elif append is not None:
             conv_out = torch.cat((conv_out, append), dim=-1)
         if latent is not None:
             conv_out = torch.cat((conv_out, latent), dim=-1)

@@ -1,9 +1,8 @@
 import torch
 import numpy as np
 import gym
-from stable_baselines3.common.vec_env import (DummyVecEnv, SubprocVecEnv,
-                                              VecEnvWrapper)
-
+from stable_baselines3.common.vec_env import (DummyVecEnv, SubprocVecEnv, VecEnvWrapper)
+import pickle
 
 def make_env(env_id, seed, rank, **kwargs):
     def _thunk():
@@ -14,7 +13,7 @@ def make_env(env_id, seed, rank, **kwargs):
     return _thunk
 
 
-def make_vec_envs(env_name, seed, num_processes, device, config_env, **kwargs):
+def make_vec_envs(env_name, seed, num_processes, device, config_env, vec_env_type, **kwargs):
     envs = [
         make_env(env_name, seed, i, **kwargs) for i in range(num_processes)
     ]
@@ -24,29 +23,39 @@ def make_vec_envs(env_name, seed, num_processes, device, config_env, **kwargs):
     else:
         envs = DummyVecEnv(envs)
 
-    envs = VecPyTorch(envs, device, config_env)
+    envs = vec_env_type(envs, device, config_env)
     return envs
 
 
-class VecPyTorch(VecEnvWrapper):
+class VecEnvBase(VecEnvWrapper):
     def __init__(self, venv, device, config_env):
-        """Return only every `skip`-th frame"""
-        super(VecPyTorch, self).__init__(venv)
+        super(VecEnvBase, self).__init__(venv)
         self.device = device
         self.config_env = config_env
         self.n_envs = self.num_envs
         self.rng = np.random.default_rng(seed=config_env.VENV_SEED)
 
-    def reset(self):
+        # Load tasks
+        dataset = config_env.DATASET
+        print("Load tasks from", dataset)
+        with open(dataset, 'rb') as f:
+            self.task_all = pickle.load(f)
+        print(len(self.task_all), "tasks are loaded")
+
+    def sample_task(self):
+        task_id = self.rng.integers(0, self.config_env.NUM_ENV_TRAIN)
+        return self.task_all[task_id], task_id
+
+    def reset(self, use_default=False, verbose=False):
         if use_default:
             task_all = [{} for _ in range(self.n_envs)]
             task_ids = np.arange(self.n_envs)
         else:
-            task_info = [(self.sample_task(return_id=True))
+            task_info = [(self.sample_task())
                          for _ in range(self.n_envs)]
             task_all = [info[0] for info in task_info]
             task_ids = [info[1] for info in task_info]
-        args_all = [(random_init, state_init, task) for task in task_all]
+        args_all = [(task,) for task in task_all]
         obs = self.venv.reset_arg(args_all)
         obs = torch.from_numpy(obs).to(self.device)
         if verbose:
@@ -61,20 +70,12 @@ class VecPyTorch(VecEnvWrapper):
     def reset_one(self,
                   index,
                   task=None,
-                  use_default=False,
-                  random_init=False,
-                  state_init=None,
                   verbose=False):
         task_id = -1  #! dummy
         if task is None:
-            if use_default:
-                task = {}
-            else:
-                task, task_id = self.sample_task(return_id=True)
+            task, task_id = self.sample_task()
         obs = self.venv.env_method('reset',
                                    task=task,
-                                   random_init=random_init,
-                                   state_init=state_init,
                                    indices=[index])[0]
         obs = torch.from_numpy(obs).to(self.device)
         if verbose:
@@ -86,6 +87,14 @@ class VecPyTorch(VecEnvWrapper):
         return obs, task_id
 
     def get_obs(self, states):
+        """Get observation - requires states
+
+        Args:
+            states ([type]): arm end-effector state
+
+        Returns:
+            [type]: [description]
+        """
         method_args_list = [(state, ) for state in states]
         observations = torch.FloatTensor(
             self.venv.env_method_arg('_get_obs',

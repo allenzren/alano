@@ -41,10 +41,9 @@ class SAC_mini(SAC_Base):
             self.actor.eval()
             self.critic.eval()
 
-    # region: main update functions
     def update_critic(self, batch):
-        (non_final_mask, non_final_state_nxt, state, action, reward, g_x, _,
-         append, non_final_append_nxt, l_x_ra, binary_cost, _, _) = batch
+        (non_final_mask, non_final_state_nxt, state, action, reward,
+         append, non_final_append_nxt, _, _) = batch
         self.critic.train()
         self.critic_target.eval()
         self.actor.eval()
@@ -55,15 +54,12 @@ class SAC_mini(SAC_Base):
             append=append)  # Used to compute loss (non-target part).
 
         # == placeholder for target ==
-        y = torch.zeros(self.BATCH_SIZE).float().to(self.device)
+        y = torch.zeros(state.shape[0]).float().to(self.device)
 
         # == compute actor next_actions and feed to critic_target ==
         with torch.no_grad():
             next_actions, next_log_prob = self.actor.sample(
                 non_final_state_nxt, append=non_final_append_nxt)
-            if self.critic_has_act_ind:
-                act_ind_rep = self.act_ind.repeat(next_actions.shape[0], 1)
-                next_actions = torch.cat((next_actions, act_ind_rep), dim=-1)
             next_q1, next_q2 = self.critic_target(non_final_state_nxt,
                                                   next_actions,
                                                   append=non_final_append_nxt)
@@ -78,21 +74,7 @@ class SAC_mini(SAC_Base):
                 raise ValueError("Unsupported RL mode.")
 
             final_mask = torch.logical_not(non_final_mask)
-            if self.mode == 'RA':
-                y[non_final_mask] = (
-                    (1.0 - self.GAMMA) *
-                    torch.max(l_x_ra[non_final_mask], g_x[non_final_mask]) +
-                    self.GAMMA *
-                    torch.max(g_x[non_final_mask],
-                              torch.min(l_x_ra[non_final_mask], q_max)))
-                if self.terminal_type == 'g':
-                    y[final_mask] = g_x[final_mask]
-                elif self.terminal_type == 'max':
-                    y[final_mask] = torch.max(l_x_ra[final_mask],
-                                              g_x[final_mask])
-                else:
-                    raise ValueError("invalid terminal type")
-            elif self.mode == 'safety':
+            if self.mode == 'safety':
                 # V(s) = max{ g(s), V(s') }
                 # Q(s, u) = V( f(s,u) ) = max{ g(s'), min_{u'} Q(s', u') }
                 # normal state
@@ -107,9 +89,8 @@ class SAC_mini(SAC_Base):
                     -1)  # already masked - can be lower dim than y
                 y = reward
                 y[non_final_mask] += self.GAMMA * target_q
-            elif self.mode == 'risk':
-                y = binary_cost  # y = 1 if it's a terminal state
-                y[non_final_mask] += self.GAMMA * q_max
+            else:
+                raise ValueError("Unsupported update mode.")
 
         # == MSE update for both Q1 and Q2 ==
         loss_q1 = F.mse_loss(input=q1.view(-1), target=y)
@@ -127,7 +108,7 @@ class SAC_mini(SAC_Base):
         """
         Use detach_encoder=True to not update conv layers
         """
-        _, _, state, _, _, _, _, append, _, _, _, _, _ = batch
+        _, _, state, _, _, append, _, _, _ = batch
 
         self.critic.eval()
         self.actor.train()
@@ -135,9 +116,6 @@ class SAC_mini(SAC_Base):
         action_sample, log_prob = self.actor.sample(state,
                                                     append=append,
                                                     detach_encoder=True)
-        if self.critic_has_act_ind:
-            act_ind_rep = self.act_ind.repeat(action_sample.shape[0], 1)
-            action_sample = torch.cat((action_sample, act_ind_rep), dim=-1)
         q_pi_1, q_pi_2 = self.critic(state,
                                      action_sample,
                                      append=append,
@@ -186,14 +164,9 @@ class SAC_mini(SAC_Base):
 
         return loss_q, loss_pi, loss_entropy, loss_alpha
 
-    # endregion
-
     def value(self, obs, append):
         u = self.actor(obs, append=append)
         u = torch.from_numpy(u).to(self.device)
-        if self.critic_has_act_ind:
-            act_ind_rep = self.act_ind.repeat(u.shape[0], 1)
-            u = torch.cat((u, act_ind_rep), dim=-1)
         v = self.critic(obs, u, append=append)[0]
         if len(obs.shape) == 3:
             v = v[0]
