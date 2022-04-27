@@ -1,27 +1,22 @@
-# Please contact the author(s) of this library if you have any questions.
-# Authors: Kai-Chieh Hsu ( kaichieh@princeton.edu )
-#          Allen Z. Ren (allen.ren@princeton.edu)
-
-from abc import ABC, abstractmethod
-from collections import namedtuple
-from queue import PriorityQueue
-import torch
 import os
+from abc import ABC, abstractmethod
+from queue import PriorityQueue
 import numpy as np
-
-from .replay_memory import ReplayMemory
-
-Transition= namedtuple('Transition', ['s', 'a', 'r', 's_', 'done', 'info'])
+import pickle
+import torch
 
 
 class AgentBase(ABC):
-    def __init__(self, CONFIG, CONFIG_ENV, CONFIG_UPDATE):
-        super(AgentBase, self).__init__()
-        self.config = CONFIG
+    def __init__(self, CONFIG, CONFIG_ENV):
+        super().__init__(CONFIG, CONFIG_ENV)
 
-        # Device
+        self.config = CONFIG
+        self.rng = np.random.default_rng(seed=CONFIG.SEED)
         self.device = CONFIG.DEVICE
         self.image_device = CONFIG.IMAGE_DEVICE
+
+        # Mode
+        self.eval = CONFIG.EVAL
 
         # Vectorized envs
         self.n_envs = CONFIG.NUM_CPUS
@@ -31,128 +26,101 @@ class AgentBase(ABC):
         self.max_eval_steps = CONFIG_ENV.MAX_EVAL_STEPS
         self.env_step_cnt = [0 for _ in range(self.n_envs)]
 
-        # Sampling
-        self.max_sample_steps = CONFIG.MAX_SAMPLE_STEPS
-        self.opt_freq = CONFIG.OPTIMIZE_FREQ
-        self.num_update_per_opt = CONFIG.UPDATE_PER_OPT
-        self.check_opt_freq = CONFIG.CHECK_OPT_FREQ
-        self.min_step_b4_opt = CONFIG.MIN_STEPS_B4_OPT
-        self.num_episode_per_eval = CONFIG.NUM_EVAL_EPISODE
-
-        # Training
-        self.batch_size = CONFIG_UPDATE.BATCH_SIZE
-        self.update_period = CONFIG_UPDATE.UPDATE_PERIOD
-
-        # memory
-        self.memory = ReplayMemory(CONFIG.MEMORY_CAPACITY, CONFIG.SEED)
-        self.rng = np.random.default_rng(seed=CONFIG.SEED)
-
-        # saving models
+        # Save
         self.out_folder = CONFIG.OUT_FOLDER
         self.save_top_k = CONFIG.SAVE_TOP_K
         self.pq_top_k = PriorityQueue()
         self.save_metric = CONFIG.SAVE_METRIC
         self.use_wandb = CONFIG.USE_WANDB
+        # Figure folder
+        # figure_folder = os.path.join(out_folder, 'figure')
+        # os.makedirs(figure_folder, exist_ok=True)
+
+        # Save loss and eval info, key is step number
+        self.loss_record = {}
+        self.eval_record = {}
+
+        # Load tasks
+        dataset = CONFIG_ENV.DATASET
+        print("= Loading tasks from", dataset)
+        with open(dataset, 'rb') as f:
+            self.task_all = pickle.load(f)
+        self.num_task = len(self.task_all)
+        print(self.num_task, "tasks are loaded")
+
+        # Mode
+        if self.eval:
+            self.set_eval_mode()
+        else:
+            self.set_train_mode()
+
+        # Set starting step
+        if CONFIG.CURRENT_STEP is None:
+            self.cnt_step = 0
+        else:
+            self.cnt_step = CONFIG.CURRENT_STEP
+            print("starting from {:d} steps".format(self.cnt_step))
 
     @abstractmethod
     def learn(self):
         raise NotImplementedError
 
+    # @abstractmethod
+    # def finish_eval(self):
+    #     raise NotImplementedError
+
     def set_train_mode(self):
+        self.num_eval_episode = 0
+
         self.eval_mode = False
-        self.num_eval_episode = 0
-        self.venv.env_method('set_train_mode')
-        s, _ = self.venv.reset()
-        return s
-    
+        self.max_env_step = self.max_train_steps
+
     def set_eval_mode(self):
-        self.venv.env_method('set_eval_mode')
         self.num_eval_episode = 0
-        self.num_eval_success = 0
+        self.num_eval_success = 0  # for calculating expected success rate
+        self.num_eval_safe = 0  # for calculating expected safety rate
+        self.eval_reward_cumulative = [0 for _ in range(self.n_envs)
+                                       ]  # for calculating cumulative reward
+        self.eval_reward_best = [0 for _ in range(self.n_envs)]
+        self.eval_reward_cumulative_all = 0
+        self.eval_reward_best_all = 0
+        self.env_step_cnt = [0 for _ in range(self.n_envs)]
+
         self.eval_mode = True
-        s, _ = self.venv.reset()
-        return s
+        self.max_env_step = self.max_eval_steps
 
-    # === Replay ===
+    # === Venv ===
+    def step(self, action):
+        return self.venv.step(action)
 
-    def sample_batch(self, batch_size=None, recent_size=None):
-        if batch_size is None:
-            batch_size = self.batch_size
-        transitions, _ = self.memory.sample(batch_size, recent_size)
-        batch = Transition(*zip(*transitions))
-        return batch
+    def reset_sim(self):
+        self.venv.env_method('close_pb')
 
-    def store_transition(self, *args):
-        self.memory.update(Transition(*args))
+    def reset_env_all(self, task_ids=None, verbose=False):
+        if task_ids is None:
+            task_ids = self.rng.integers(low=0,
+                                         high=self.num_task,
+                                         size=(self.n_envs, ))
+        tasks = [self.task_all[id] for id in task_ids]
+        s = self.venv.reset(tasks)
+        if verbose:
+            for index in range(self.n_envs):
+                print("<-- Reset environment {} with task {}:".format(
+                    index, task_ids[index]))
+        self.env_step_cnt = [0 for _ in range(self.n_envs)]
+        return s, task_ids
 
-    def unpack_batch(self,
-                     batch,
-                     get_rnn_hidden=False):
-        non_final_mask = torch.tensor(tuple(map(lambda s: not s, batch.done)),
-                                      dtype=torch.bool).view(-1).to(
-                                          self.device)
-        non_final_state_nxt = torch.cat([
-            s for done, s in zip(batch.done, batch.s_) if not done
-        ]).to(self.device)
-        state = torch.cat(batch.s).to(self.device)
-        reward = torch.FloatTensor(batch.r).to(self.device)
-        action = torch.cat(batch.a).to(self.device)
-
-        # Debug
-        # import matplotlib.pyplot as plt
-        # for ind in range(10):
-            # f, axarr = plt.subplots(2, 4)
-            # for i_ind in range(4):
-            #     axarr[0, i_ind].imshow(
-            #         np.transpose(
-            #             state[ind][(i_ind * 3):((i_ind+1) * 3)].cpu().numpy(),
-            #             [1, 2, 0]
-            #         )
-            #     )
-            #     axarr[1, i_ind].imshow(
-            #         np.transpose(
-            #             non_final_state_nxt[ind][(i_ind
-            #                                       * 3):((i_ind+1)
-            #                                             * 3)].cpu().numpy(),
-            #             [1, 2, 0]
-            #         )
-            #     )
-            # f, axarr = plt.subplots(2, 2)
-            # axarr[0, 0].imshow(
-            #     np.transpose(
-            #         state[ind][1:].cpu().numpy(),
-            #         [1, 2, 0]
-            #     )
-            # )
-            # axarr[0, 1].imshow(state[ind][0].cpu().numpy())     
-            # axarr[1, 0].imshow(
-            #     np.transpose(
-            #         non_final_state_nxt[ind][1:].cpu().numpy(),
-            #         [1, 2, 0]
-            #     )
-            # )
-            # axarr[1, 1].imshow(non_final_state_nxt[ind][0].cpu().numpy())     
-            # plt.show()
-
-        # Optional
-        append = None
-        non_final_append_nxt = None
-        if self.use_append:
-            append = torch.cat([info['append']
-                                for info in batch.info]).to(self.device)
-            non_final_append_nxt = torch.cat([
-                info['append_nxt'] for info in batch.info
-            ]).to(self.device)[non_final_mask]
-        hn = None
-        cn = None
-        if get_rnn_hidden:
-            hn = batch.info[0]['hn'].to(self.device)  # only get initial, 1x
-            cn = batch.info[0]['hn'].to(self.device)
-        return (non_final_mask, non_final_state_nxt, state, action, reward,
-                append, non_final_append_nxt, hn, cn)
+    def reset_env(self, env_ind, task_id=None, verbose=False):
+        if task_id is None:
+            task_id = self.rng.integers(low=0, high=self.num_task)
+        s = self.venv.reset_one(env_ind, self.task_all[task_id])
+        if verbose:
+            print("<-- Reset environment {} with task {}:".format(
+                env_ind, task_id))
+        self.env_step_cnt[env_ind] = 0
+        return s, task_id
 
     # === Models ===
-
     def save(self, metric=None, force_save=False):
         assert metric is not None or force_save, \
             "should provide metric of force save"
@@ -179,6 +147,7 @@ class AgentBase(ABC):
                 module.save(self.cnt_step, module_folder)
             print(self.pq_top_k.queue)
 
+    # TODO
     def restore(self, step, logs_path, agent_type, actor_path=None):
         """Restore the weights of the neural network.
 
@@ -186,7 +155,6 @@ class AgentBase(ABC):
             step (int): #updates trained.
             logs_path (str): the path of the directory, under this folder there
                 should be critic/ and agent/ folders.
-            agent_type (str): performance or backup.
         """
         model_folder = path_c = os.path.join(logs_path, agent_type)
         path_c = os.path.join(model_folder, 'critic',
@@ -196,33 +164,11 @@ class AgentBase(ABC):
         else:
             path_a = os.path.join(model_folder, 'actor',
                                   'actor-{}.pth'.format(step))
-        if agent_type == 'backup':
-            self.backup.critic.load_state_dict(
-                torch.load(path_c, map_location=self.device))
-            self.backup.critic.to(self.device)
-            self.backup.critic_target.load_state_dict(
-                torch.load(path_c, map_location=self.device))
-            self.backup.critic_target.to(self.device)
-            self.backup.actor.load_state_dict(
-                torch.load(path_a, map_location=self.device))
-            self.backup.actor.to(self.device)
-        elif agent_type == 'performance':
-            self.performance.critic.load_state_dict(
-                torch.load(path_c, map_location=self.device))
-            self.performance.critic.to(self.device)
-            self.performance.critic_target.load_state_dict(
-                torch.load(path_c, map_location=self.device))
-            self.performance.critic_target.to(self.device)
-            self.performance.actor.load_state_dict(
-                torch.load(path_a, map_location=self.device))
-            self.performance.actor.to(self.device)
+        self.learner.critic.load_state_dict(
+            torch.load(path_c, map_location=self.device))
+        self.learner.critic_target.load_state_dict(
+            torch.load(path_c, map_location=self.device))
+        self.learner.actor.load_state_dict(
+            torch.load(path_a, map_location=self.device))
         print('  <= Restore {} with {} updates from {}.'.format(
             agent_type, step, model_folder))
-
-    # === Visualization ===
-
-    def get_figures(self):
-        raise NotImplementedError
-
-    def value(self):
-        raise NotImplementedError

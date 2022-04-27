@@ -6,7 +6,6 @@ from collections import deque
 
 
 class ReplayMemory(object):
-
     def __init__(self, capacity, seed):
         self.reset(capacity)
         self.capacity = capacity
@@ -31,7 +30,7 @@ class ReplayMemory(object):
         length = len(self.memory)
         if recent_size is not None:
             length = min(length, recent_size)
-        indices = self.rng.integers(low=0, high=length, size=(batch_size,))
+        indices = self.rng.integers(low=0, high=length, size=(batch_size, ))
         return [self.memory[i] for i in indices], None  # dummy for nxt
 
     def __len__(self):
@@ -39,7 +38,6 @@ class ReplayMemory(object):
 
 
 class ReplayMemoryTraj():
-
     def __init__(self, capacity, seed, sample_next=False):
         self.reset(capacity)
         self.capacity = capacity
@@ -57,16 +55,17 @@ class ReplayMemoryTraj():
         self.memory.appendleft(traj)  # pop from right if full
         self.traj_len.appendleft(len(traj))
 
-    def set_possible_samples(
-        self, traj_size=50, frame_skip=0, allow_repeat_frame=False,
-        recent_size=None
-    ):
+    def set_possible_samples(self,
+                             traj_size=50,
+                             frame_skip=0,
+                             allow_repeat_frame=False,
+                             recent_size=None):
         #! if burn-in, not using initial steps, might be an issue with
         #! fixed_init also some trajectories can be too short for traj_size
         if allow_repeat_frame:
             self.offset = 0
         else:
-            self.offset = (traj_size-1) * frame_skip + traj_size
+            self.offset = (traj_size - 1) * frame_skip + traj_size
         if recent_size is not None:
             traj_len_all = [
                 self.traj_len[ind]
@@ -76,7 +75,7 @@ class ReplayMemoryTraj():
             traj_len_all = self.traj_len
         self.possible_end_inds = []
         for traj_ind, traj_len in enumerate(
-            traj_len_all
+                traj_len_all
         ):  # this is fine since recent traj starts from ind=0 (from the left)
             self.possible_end_inds += [
                 (traj_ind, transition_ind)
@@ -85,11 +84,11 @@ class ReplayMemoryTraj():
 
     def sample(self, batch_size, traj_size=50, frame_skip=0):
         traj_cover = (
-            traj_size-1
+            traj_size - 1
         ) * frame_skip + traj_size  # min steps needed; if fewer, randomly sample
-        inds = self.rng.integers(
-            low=0, high=len(self.possible_end_inds), size=(batch_size,)
-        )
+        inds = self.rng.integers(low=0,
+                                 high=len(self.possible_end_inds),
+                                 size=(batch_size, ))
         out = []
         out_nxt = []
         for ind in inds:
@@ -101,13 +100,13 @@ class ReplayMemoryTraj():
                     seq = np.zeros((traj_size), dtype='int')
                 else:  # randomly sampled from
                     seq_random = np.random.choice(
-                        transition_ind, traj_size - 1, replace=True
-                    )  # exclude transition_ind
+                        transition_ind, traj_size - 1,
+                        replace=True)  # exclude transition_ind
                     seq_random = np.sort(seq_random)  # ascending
                     seq = np.append(seq_random, transition_ind)  # add to end
             else:
-                seq = -np.arange(0,
-                                 traj_size) * (frame_skip+1) + transition_ind
+                seq = -np.arange(0, traj_size) * (frame_skip +
+                                                  1) + transition_ind
                 seq = np.flip(seq, 0)
             out += [[self.memory[traj_ind][ind] for ind in seq]]
 
@@ -115,16 +114,16 @@ class ReplayMemoryTraj():
             if self.sample_next:
                 transition_ind += 1
                 if transition_ind < traj_cover:  # cannot be 0 any more
-                    seq_random = np.random.choice(
-                        transition_ind, traj_size - 1, replace=True
-                    )
+                    seq_random = np.random.choice(transition_ind,
+                                                  traj_size - 1,
+                                                  replace=True)
                     seq_random = np.sort(seq_random)
                     seq = np.append(seq_random, transition_ind)
                 elif transition_ind == self.traj_len[traj_ind]:
                     seq = []
                 else:
-                    seq = -np.arange(0, traj_size
-                                    ) * (frame_skip+1) + transition_ind
+                    seq = -np.arange(0, traj_size) * (frame_skip +
+                                                      1) + transition_ind
                     seq = np.flip(seq, 0)
                 out_nxt += [[self.memory[traj_ind][ind] for ind in seq]]
         return out, out_nxt

@@ -32,8 +32,8 @@ class SAC_Base(ABC):
         # == ENV PARAM ==
         self.action_mag = CONFIG_ENV.ACTION_MAG
         self.action_dim = CONFIG_ENV.ACTION_DIM
-        self.img_w = CONFIG_ENV.IMG_W
-        self.img_h = CONFIG_ENV.IMG_H
+        self.img_h = CONFIG_ENV.CAMERA['img_h']
+        self.img_w = CONFIG_ENV.CAMERA['img_w']
 
         # NN: device, action indicators
         self.device = CONFIG.DEVICE
@@ -111,24 +111,6 @@ class SAC_Base(ABC):
                       actor_path=None,
                       critic_path=None,
                       tie_conv=True):
-
-        self.critic = SACTwinnedQNetwork(
-            input_n_channel=self.CONFIG_ARCH.OBS_CHANNEL,
-            img_sz=[self.img_h, self.img_w],
-            # latent_dim=self.CONFIG.LATENT_DIM,
-            mlp_dim=self.CONFIG_ARCH.MLP_DIM['critic'],
-            action_dim=self.action_dim,
-            append_dim=self.CONFIG_ARCH.APPEND_DIM,
-            activation_type=self.CONFIG_ARCH.ACTIVATION['critic'],
-            kernel_sz=self.CONFIG_ARCH.KERNEL_SIZE,
-            stride=self.CONFIG_ARCH.STRIDE,
-            n_channel=self.CONFIG_ARCH.N_CHANNEL,
-            use_sm=self.CONFIG_ARCH.USE_SM,
-            use_ln=self.CONFIG_ARCH.USE_LN,
-            device=self.device,
-            verbose=verbose)
-        if verbose:
-            print("\nThe actor shares the same encoder with the critic.")
         self.actor = SACPiNetwork(
             input_n_channel=self.CONFIG_ARCH.OBS_CHANNEL,
             img_sz=[self.img_h, self.img_w],
@@ -140,6 +122,23 @@ class SAC_Base(ABC):
             activation_type=self.CONFIG_ARCH.ACTIVATION['actor'],
             kernel_sz=self.CONFIG_ARCH.KERNEL_SIZE,
             stride=self.CONFIG_ARCH.STRIDE,
+            padding=self.CONFIG_ARCH.PADDING,
+            n_channel=self.CONFIG_ARCH.N_CHANNEL,
+            use_sm=self.CONFIG_ARCH.USE_SM,
+            use_ln=self.CONFIG_ARCH.USE_LN,
+            device=self.device,
+            verbose=verbose)
+        self.critic = SACTwinnedQNetwork(
+            input_n_channel=self.CONFIG_ARCH.OBS_CHANNEL,
+            img_sz=[self.img_h, self.img_w],
+            # latent_dim=self.CONFIG.LATENT_DIM,
+            mlp_dim=self.CONFIG_ARCH.MLP_DIM['critic'],
+            action_dim=self.action_dim,
+            append_dim=self.CONFIG_ARCH.APPEND_DIM,
+            activation_type=self.CONFIG_ARCH.ACTIVATION['critic'],
+            kernel_sz=self.CONFIG_ARCH.KERNEL_SIZE,
+            stride=self.CONFIG_ARCH.STRIDE,
+            padding=self.CONFIG_ARCH.PADDING,
             n_channel=self.CONFIG_ARCH.N_CHANNEL,
             use_sm=self.CONFIG_ARCH.USE_SM,
             use_ln=self.CONFIG_ARCH.USE_LN,
@@ -147,15 +146,14 @@ class SAC_Base(ABC):
             verbose=verbose)
 
         # Load model if specified
-        if critic_path is not None:
-            self.critic.load_state_dict(
-                torch.load(critic_path, map_location=self.device))
-            print("--> Load critic wights from {}".format(critic_path))
-
         if actor_path is not None:
             self.actor.load_state_dict(
                 torch.load(actor_path, map_location=self.device))
             print("--> Load actor wights from {}".format(actor_path))
+        if critic_path is not None:
+            self.critic.load_state_dict(
+                torch.load(critic_path, map_location=self.device))
+            print("--> Load critic wights from {}".format(critic_path))
 
         # Copy for critic targer
         self.critic_target = copy.deepcopy(self.critic)

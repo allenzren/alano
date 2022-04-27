@@ -42,8 +42,8 @@ class SAC_mini(SAC_Base):
             self.critic.eval()
 
     def update_critic(self, batch):
-        (non_final_mask, non_final_state_nxt, state, action, reward,
-         append, non_final_append_nxt, _, _) = batch
+        (non_final_mask, non_final_state_nxt, state, action, reward, append,
+         non_final_append_nxt, _, _) = batch
         self.critic.train()
         self.critic_target.eval()
         self.actor.eval()

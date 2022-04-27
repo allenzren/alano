@@ -54,6 +54,7 @@ class ConvNet(nn.Module):
         append_dim=0,  # not counting z_mlp
         cnn_kernel_size=[5, 3],
         cnn_stride=[2, 1],
+        cnn_padding=None,
         output_n_channel=[16, 32],
         img_size=128,
         verbose=True,
@@ -88,6 +89,8 @@ class ConvNet(nn.Module):
 
             # Add conv
             padding = 0
+            if cnn_padding is not None:
+                padding = cnn_padding[i]
             if i == 0:
                 in_channels = input_n_channel
             else:

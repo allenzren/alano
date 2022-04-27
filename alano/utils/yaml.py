@@ -21,12 +21,6 @@ class Struct:
             setattr(self, key, value)
 
 
-KEYS = [
-    'environment', 'training', 'arch_performance', 'arch_backup',
-    'update_performance', 'update_backup'
-]
-
-
 def dict2object(dictionary, key):
     return Struct(**dictionary[key])
 
@@ -40,7 +34,7 @@ def load_config(filePath):
     return configDict
 
 
-def dump_config(filePath, objects, keys=KEYS):
+def dump_config(filePath, objects, keys):
     data = {}
     for key, object in zip(keys, objects):
         data[key] = object.__dict__
