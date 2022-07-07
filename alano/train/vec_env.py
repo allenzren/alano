@@ -30,14 +30,17 @@ class VecEnvBase(SubprocVecEnv):
         self.device = device
         self.config_env = config_env
 
+
     def reset(self, tasks):
         args_all = [(task, ) for task in tasks]
         obs = self.reset_arg(args_all)
         return torch.from_numpy(obs).to(self.device)
 
+
     def reset_one(self, index, task):
         obs = self.env_method('reset', task=task, indices=[index])[0]
         return torch.from_numpy(obs).to(self.device)
+
 
     # Overrides
     def step_async(self, actions):
@@ -45,12 +48,14 @@ class VecEnvBase(SubprocVecEnv):
             actions = actions.cpu().numpy()
         super().step_async(actions)
 
+
     # Overrides
     def step_wait(self):
         obs, reward, done, info = super().step_wait()
         obs = torch.from_numpy(obs).to(self.device)
         reward = torch.from_numpy(reward).unsqueeze(dim=1).float()
         return obs, reward, done, info
+
 
     def get_obs(self, states):
         method_args_list = [(state, ) for state in states]
