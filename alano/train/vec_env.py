@@ -1,22 +1,27 @@
 import torch
-import gym
+# import gym
 from .subproc_vec_env import SubprocVecEnv
 
 
-def make_env(env_id, seed, rank, **kwargs):
-    def _thunk():
-        env = gym.make(env_id, **kwargs)
-        env.seed(seed + rank)
-        return env
+# def make_env(env_id, seed, rank, **kwargs):
+    # def _thunk():
+    #     env = gym.make(env_id, **kwargs)
+    #     env.seed(seed + rank)
+    #     return env
 
-    return _thunk
+    # return _thunk
 
 
-def make_vec_envs(env_name, seed, num_processes, cpu_offset, device,
+def make_vec_envs(env_type, seed, num_processes, cpu_offset, device,
                   config_env, vec_env_type, **kwargs):
+    # envs = [
+    #     make_env(env_name, seed, i, **kwargs) for i in range(num_processes)
+    # ]
     envs = [
-        make_env(env_name, seed, i, **kwargs) for i in range(num_processes)
+        env_type(**kwargs) for i in range(num_processes)
     ]
+    for rank, env in enumerate(envs):
+        env.seed(seed+rank)
     envs = vec_env_type(envs, cpu_offset, device, config_env)
     return envs
 

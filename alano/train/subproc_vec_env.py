@@ -6,11 +6,11 @@ import cloudpickle
 def _worker(remote, parent_remote, env_fn_wrapper, cpu_ind=-1):
     # Import here to avoid a circular import
     import torch
-    if cpu_ind > -1:
-        import psutil
-        p = psutil.Process()
-        p.cpu_affinity([cpu_ind])
-        torch.set_num_threads(1)
+    # if cpu_ind > -1:
+    # import psutil
+    # p = psutil.Process()
+    # p.cpu_affinity([cpu_ind])
+    # torch.set_num_threads(1)
 
     parent_remote.close()
     env = env_fn_wrapper.var()
