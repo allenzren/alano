@@ -12,17 +12,17 @@ from .subproc_vec_env import SubprocVecEnv
     # return _thunk
 
 
-def make_vec_envs(env_type, seed, num_processes, cpu_offset, device,
-                  config_env, vec_env_type, **kwargs):
+def make_vec_envs(env_type, seed, num_process, cpu_offset, device,
+                 vec_env_type, **kwargs):
     # envs = [
     #     make_env(env_name, seed, i, **kwargs) for i in range(num_processes)
     # ]
     envs = [
-        env_type(**kwargs) for i in range(num_processes)
+        env_type(**kwargs) for _ in range(num_process)
     ]
     for rank, env in enumerate(envs):
         env.seed(seed+rank)
-    envs = vec_env_type(envs, cpu_offset, device, config_env)
+    envs = vec_env_type(envs, cpu_offset, device)
     return envs
 
 
@@ -30,10 +30,9 @@ class VecEnvBase(SubprocVecEnv):
     """
     Mostly for torch
     """
-    def __init__(self, venv, cpu_offset, device, config_env):
+    def __init__(self, venv, cpu_offset, device):
         super(VecEnvBase, self).__init__(venv, cpu_offset)
         self.device = device
-        self.config_env = config_env
 
 
     def reset(self, tasks):
