@@ -3,10 +3,10 @@ from torch.nn.utils import spectral_norm
 from collections import OrderedDict
 
 activation_dict = nn.ModuleDict({
-    "ReLU": nn.ReLU(),
-    "ELU": nn.ELU(),
-    "Tanh": nn.Tanh(),
-    "Identity": nn.Identity()
+    "relu": nn.ReLU(),
+    "elu": nn.ELU(),
+    "tanh": nn.Tanh(),
+    "identity": nn.Identity()
 })
 
 
@@ -17,8 +17,8 @@ class MLP(nn.Module):
     """
     def __init__(self,
                  dimList,
-                 activation_type='Tanh',
-                 out_activation_type='Identity',
+                 activation_type='tanh',
+                 out_activation_type='identity',
                  use_ln=False,
                  use_spec=False,
                  use_bn=False,

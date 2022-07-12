@@ -546,7 +546,7 @@ class GaussianPolicy(nn.Module):
     def __init__(self,
                  dimList,
                  action_mag,
-                 activation_type='ReLU',
+                 activation_type='relu',
                  use_ln=True,
                  device='cpu',
                  verbose=True):
