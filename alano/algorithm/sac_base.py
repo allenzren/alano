@@ -12,7 +12,7 @@ from torch.optim import lr_scheduler
 
 from ..model.sac import SACPiNetwork, SACTwinnedQNetwork
 from ..train.scheduler import StepLRMargin
-from .utils import soft_update, save_model
+from .util import soft_update, save_model
 
 
 class SAC_Base(ABC):

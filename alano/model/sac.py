@@ -8,7 +8,7 @@ from .conv import ConvNet
 from .mlp import MLP
 from .gru import GRU
 from .lstm import LSTM
-from .utils import tie_weights
+from .util import tie_weights
 
 
 class Encoder(torch.nn.Module):

@@ -13,7 +13,7 @@ from .subproc_vec_env import SubprocVecEnv
 
 
 def make_vec_envs(env_type, seed, num_process, cpu_offset, device,
-                 vec_env_type, **kwargs):
+                 vec_env_type, vec_env_cfg, **kwargs):
     # envs = [
     #     make_env(env_name, seed, i, **kwargs) for i in range(num_processes)
     # ]
@@ -22,7 +22,7 @@ def make_vec_envs(env_type, seed, num_process, cpu_offset, device,
     ]
     for rank, env in enumerate(envs):
         env.seed(seed+rank)
-    envs = vec_env_type(envs, cpu_offset, device)
+    envs = vec_env_type(envs, cpu_offset, device, vec_env_cfg)
     return envs
 
 
@@ -48,6 +48,7 @@ class VecEnvBase(SubprocVecEnv):
 
     # Overrides
     def step_async(self, actions):
+        # In reality, the action space can be anything... - e.g., a trajectory plus the initial joint angles for the pushing task. We could also super this in each  class to check the action space carefully. vec_env
         if isinstance(actions, torch.Tensor):
             actions = actions.cpu().numpy()
         super().step_async(actions)
