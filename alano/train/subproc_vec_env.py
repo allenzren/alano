@@ -1,19 +1,21 @@
 import numpy as np
 import multiprocessing as mp
 import cloudpickle
+import dill
 
 
 def _worker(remote, parent_remote, env_fn_wrapper, cpu_ind=-1):
     # Import here to avoid a circular import
-    # import torch
     # if cpu_ind > -1:
-    # import psutil
-    # p = psutil.Process()
-    # p.cpu_affinity([cpu_ind])
-    # torch.set_num_threads(1)
+    #     import psutil
+    #     import torch
+    #     p = psutil.Process()
+    #     p.cpu_affinity([cpu_ind])
+    #     torch.set_num_threads(1)
+    #! slow things down?
 
     parent_remote.close()
-    env = env_fn_wrapper.var    # was var.() when using gym
+    env = env_fn_wrapper.var  # was var.() when using gym
     while True:
         try:
             cmd, data = remote.recv()
@@ -74,7 +76,11 @@ class SubprocVecEnv():
            Must be one of the methods returned by multiprocessing.get_all_start_methods().
            Defaults to 'forkserver' on available platforms, and 'spawn' otherwise.
     """
-    def __init__(self, env_fns, cpu_offset=0, start_method=None):
+    def __init__(self,
+                 env_fns,
+                 cpu_offset=0,
+                 start_method=None,
+                 pickle_option='cloudpickle'):
         self.waiting = False
         self.closed = False
         self.n_envs = len(env_fns)
@@ -90,9 +96,15 @@ class SubprocVecEnv():
         self.remotes, self.work_remotes = zip(
             *[ctx.Pipe() for _ in range(self.n_envs)])
         self.processes = []
+        if pickle_option == 'cloudpickle':
+            pickle_wrapper = CloudpickleWrapper
+        elif pickle_option == 'dill':
+            pickle_wrapper = DillWrapper
+        else:
+            raise 'Unknown pickle options!'
         for ind, (work_remote, remote, env_fn) in enumerate(
                 zip(self.work_remotes, self.remotes, env_fns)):
-            args = (work_remote, remote, CloudpickleWrapper(env_fn),
+            args = (work_remote, remote, pickle_wrapper(env_fn),
                     ind + cpu_offset)
             # daemon=True: if the main process crashes, we should not cause things to hang
             process = ctx.Process(target=_worker, args=args, daemon=True)  # pytype:disable=attribute-error
@@ -220,3 +232,17 @@ class CloudpickleWrapper:
 
     def __setstate__(self, var) -> None:
         self.var = cloudpickle.loads(var)
+
+
+class DillWrapper:
+    """
+    Uses dill to serialize contents (otherwise multiprocessing tries to use pickle)
+    """
+    def __init__(self, var):
+        self.var = var
+
+    def __getstate__(self):
+        return dill.dumps(self.var)
+
+    def __setstate__(self, var) -> None:
+        self.var = dill.loads(var)
